@@ -1,12 +1,8 @@
-#
-# From: Jim Perrin <jperrin@gmail.com>
-# Updated for RHEL 7 / CentOS 7  with addition of netinstall, using Draft v1 as reference
-############## Secure Kickstart version 1.0 ##############
 ##########################################################
 #
-# Name: secure-kickstart.cfg
-# Description: Kickstart file with many of the DISA STIG
-#	       changes applied via %post functionality
+# Name: secure-lockdown.sh
+# Description: Modified script sourced from Kickstart file with many of the DISA STIG 
+# changes applied via %post functionality
 # Distro: Centos/RHEL 7 & Fedora 25+
 # 
 #################### End User Notes ######################
@@ -15,121 +11,14 @@
 # using this document. Partitioning space, system use, 
 # and other tasks that make servers different.
 #
-####################### Usage ############################
 #
-# 1. Set up partitioning, or leave commented to get the 
-#    anaconda partitioner. 
-# 2. Review the package list. Add or remove as needed
-# 3. This kickstart assumes a local mirror to install
-#     from. Change this to suit your needs.
-
-install
-#upgrade 
-#cdrom
-netinstall
-#url --url http://192.168.1.1./installmedia
-url --url https://mirror.cc.vt.edu/pub/fedora/linux/releases/test/26_Beta/Server/x86_64/os/ 
-lang en_US.UTF-8
-keyboard us
-network --onboot=yes --bootproto=dhcp 
-halt
-
-########## !! CHANGE THIS !! ##########
-# Changes if making an installer 
-## TODO: Work in logic to check for dmsquash-live, using reduced sizes if on a live or making a live, and using these values if not.
-partition /boot --fstype "xfs" --size=500 --ondisk=sda
-partition /boot/efi --fstype "efi system partition" --size=500 --ondisk=sda
-partition  linwin-crypt --size=0 --grow --ondisk=sda
-volgroup linwin-crypt --pesize=256000
-logvol swap --fstype swap --name=swap --vgname=linwin-crypt --size=4096
-logvol / --fstype xfs --name=root --vgname=linwin-crypt --size=10240
-logvol /var --fstype xfs --name=var --vgname=linwin-crypt --size=10240
-logvol /home --fstype xfs --name=home --vgname=linwin-crypt --size=122880
-logvol /tmp --fstype xfs --name=tmp --vgname=linwin-crypt --size=15360
-logvol /opt --fstype xfs --name=opt --vgname=linwin-crypt --size=10240
-logvol /usr --fstype xfs --name=usr --vgname=linwin-crypt --size=10240
-logvol /usr/local --fstype xfs --name=usr_local --vgname=linwin-crypt --size=5120
-logvol /usr/local/bin --fstype xfs --name=usr_local_bin --vgname=linwin-crypt --size=5120
-logvol /scripts	--fstype xfs --name=scripts --vgname=linwin-crypt --size=1024
-logvol /var/log --fstype xfs --name=var_log --vgname=linwin-crypt --size=10240
-logvol /var/log/audit --fstype xfs --name=var_log_audit --vgname=linwin-crypt --size=10240
-logvol /var/tmp --fstype xfs --name=var_tmp --vgname=linwin-crypt --size=15360
-logvol /srv  --fstype xfs --name=srv --vgname=linwin-crypt  --size=15360
-logvol /var/lmc --fstype xfs --name=var_lmc --vgname=linwin-crypt --size=51200
-
-# STIG requires a passworded bootloader 
-# grub2-mkpasswd-pbkdf2 using sha512 and a 22 character string
-bootloader --location mbr --iscrypted --password=grub.pbkdf2.sha512.10000.3CF2E685F64BF673FC390927CE7CD27EA10D054DCFD5F1F24ADFBCD364DEDAD2B483841829AC8E9891D530F3C02E0D79F098CD07842A101A7599FC37CFFC1023.DD7457D84E226EE12D86B8EA73E40F4D90B35496AB32EB22CF9DDF9DD1BAA21BFB3F28610B380AB26C553FD6D4DA7E67CADE6D9B9651522E6E64A6C05FE7903B
 # Configure authentication to FORCE /etc/*shadow, and enable kerberos and ldap
-authconfig --enableshadow --enablemd5 --enablekrb5 --enableldap
-selinux --enforcing
-# Password generated with:
-# python3 -c 'import crypt; print(crypt.crypt("26_character_string_here", crypt.mksalt(crypt.METHOD_SHA512)))'
-# STIG and best practice require a strong root password. Preferrably with a sha256+ hash algorithm.
-rootpw --iscrypted $6$KtknFXhK2jOa58cF$O7WBhsiv8Y1fz0LCmP0HgeStbj6VEVTAojQ3IrbWRNXhvIj2mOsefmGZKtH1zdBJcst4GBAvXOrzEq6jRZ8Z/1
-# Set local time to EST, while indicating hardware clock is set to UTC
-timezone --utc America/New_York
-firewall --enabled --port=22:tcp  # This will be further restricted later
-halt
+authconfig --enableshadow --enablemd5 --enablekrb5 --enableldap  --updateall
 
 ########## UPDATE THE PACKAGE LIST #############
-%packages --resolvedeps
-# For bare systems, these are the groups you need initially.
-@Base
-@text-internet
-@server-product-environment
-@security-lab
-@web-server
-@editors
-# For something with a gui, uncomment these
-@gnome-desktop
-@system-tools
-@base-x
-@graphics
-@printing
-@sound-and-video
-@xfce-desktop
+dnf -y install @security-lab @web-server @editors @gnome-desktop @system-tools @base-x @graphics @printing @sound-and-video @xfce-desktop 
 # Packages added for security
-aide
-audit
-vlock
-i3wm
-logwatch
-# Packages removed because we don't need/use them
--compiz
--emacs-leim
--emacspeak
--ethereal
--ethereal-gnome
--gnome-games
--isdn4k-utils
-nmap
--octave
--oprofile
--rcs
-tcpdump
--valgrind
-zsh
-
-%pre
-
-%post --nochroot
-#mkdir /mnt/sysimage/tmp/ks-tree-copy
-#if [ -d /oldtmp/ks-tree-shadow ]; then
-#    cp -fa /oldtmp/ks-tree-shadow/* /mnt/sysimage/tmp/ks-tree-copy
-#elif [ -d /tmp/ks-tree-shadow ]; then
-#    cp -fa /tmp/ks-tree-shadow/* /mnt/sysimage/tmp/ks-tree-copy
-#fi
-cp /etc/resolv.conf /mnt/sysimage/etc/resolv.conf
-
-%post
-
-## Log errors by creating one big subshell
-(
-
-if [ -f /etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-25-x86_64 || /etc/pki/rpm-gpg/RPM-GPG-KEY-RPM-GPG-KEY-fedora-26-x86_64 ]; then
-  rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY 
-fi
+dnf -y install aide audit vlock i3wm logwatch nmap zsh
 
 ############# Adding Security Enhancements ############################
 
@@ -305,9 +194,8 @@ exit 0
 EOF
 echo "GEN000420 Completed"
 fi
+## Harden audit // git@github.com:virtadpt/rhel-hardening.git
 
-## Harden audit  // git@github.com:virtadpt/rhel-hardening.git
-cat <<EOF> /etc/audit/rules.d/hardened.rules
 ## This file is automatically generated from /etc/audit/rules.d
 -D
 -b 320
@@ -381,8 +269,9 @@ cat <<EOF> /etc/audit/rules.d/hardened.rules
 -w /sbin/modprobe -p x -k modules
 -a always,exit -F arch=b64 -S init_module -S delete_module -k modules
 EOF
-## Harden auditd now  //  git@github.com:virtadpt/rhel-hardening.git
-cat << EOF > /etc/audit/auditd.conf 
+
+## Harden auditd now 
+cat << EOF > /etc/audit/auditd.conf
 #
 # This file controls the configuration of the audit daemon
 #
@@ -422,7 +311,7 @@ admin_space_left_action = suspend
 disk_full_action = SUSPEND
 disk_error_action = SUSPEND
 
-##tcp_listen_port = 
+##tcp_listen_port =
 tcp_listen_queue = 5
 tcp_max_per_addr = 1
 ##tcp_client_ports = 1024-65535
@@ -431,6 +320,7 @@ enable_krb5 = no
 krb5_principal = auditd
 ##krb5_key_file = /etc/audit/audit.key
 EOF
+
 ################## File and Directory Security #########################
 
 # Restrict mount points with noexec, nosuid, and nodev where applicable
@@ -499,6 +389,131 @@ echo "GEN002420 Complete"
 # GEN000920 (G023)
 echo "Locking down GEN000920"
 # Correct the permissions on /root to a DISA allowed 700
+chmod 700 /root
+echo "GEN000920 Complete"
+
+# GEN002680 (G094)
+# reset permissions on audit logs
+echo "Locking down GEN002680"
+chmod 700 /var/log/audit
+chmod 600 /var/log/audit/*
+echo "GEN002680 Complete"
+
+# GEN003080
+echo "Locking down GEN003080"
+chmod 600 /etc/crontab
+chmod 700 /usr/share/logwatch/scripts/logwatch.pl
+echo "GEN003080 Complete"
+
+# GEN003520 ( RHEL5 default anyway )
+echo "Locking down GEN003520"
+chmod 700 /var/crash
+chown -R root.root /var/crash
+echo "GEN003520 Complete"
+
+# GEN006520
+echo "Locking down GEN006520"
+chmod 740 /etc/rc.d/init.d/iptables
+chmod 740 /sbin/iptables
+chmod 740 /usr/share/logwatch/scripts/services/iptables
+echo "GEN006520 Complete"
+
+# GEN001560
+echo "Locking down GEN001560"
+chmod -R 700 /etc/skel
+echo "GEN001560 Complete"
+
+# GEN005400 (G656)
+# Reset the permissions to a DISA-blessed rw-r-----
+echo "Locking down GEN005400"
+chmod 640 /etc/syslog.conf
+echo "GEN005400 Complete"
+
+# LNX00440 (L046)
+# Set mode to DISA-blessed rw-r------
+echo "Locking down LNX00440"
+chmod 640 /etc/security/access.conf
+echo "LNX00440 Complete"
+
+# GEN001260
+echo "Locking down GEN001260"
+perl -npe 's%chmod 0664 /var/run/utmp /var/log/wtmp%chmod 0644 /var/run/utmp /var/log/wtmp%g' -i /etc/systemd/system.conf
+echo "GEN001260"
+
+# LNX00520 (L208)
+echo "Locking down LNX00520"
+chmod 600 /etc/sysctl.conf
+echo "LNX00520 Complete"
+
+# Add some enhancements to sysctl
+cat << 'EOF' >> /etc/sysctl.conf
+net.ipv4.ip_forward = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.tcp_max_syn_backlog = 1280
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.default.secure_redirects = 0
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+net.ipv4.tcp_syncookies = 1
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.tcp_timestamps = 0
+kernel.exec-shield = 1
+kernel.randomize_va_space = 1
+EOF
+
+########## Turn off the uneeded stuff #############
+# IAVA0410 (G592) and GEN003700
+# Turn off unneeded services
+# You may want to leave sendmail enabled but the STIG says otherwise
+# I mark this as mitigated by the firewall, and not accepting outside
+# connections. The NSA RHEL5 guide has a full service list 
+# with recommendations
+echo "Locking down IAVA0410 and GEN003700"
+/sbin/chkconfig bluetooth off
+/sbin/chkconfig irda off
+/sbin/chkconfig lm_sensors off
+/sbin/chkconfig portmap off
+/sbin/chkconfig rawdevices off
+#/sbin/chkconfig rpcgssd off
+#/sbin/chkconfig rpcidmapd off
+#/sbin/chkconfig rpcsvcgssd off
+#/sbin/chkconfig sendmail off
+/sbin/chkconfig xinetd off
+/sbin/chkconfig kudzu off
+echo "IAVA0410 and GEN003700 Complete"
+
+######### Remove useless users ##############
+# This isn't strictly needed as they have a default shell of nologin
+# but we're removing them anyway to be safe.
+
+echo "Locking down LNX0034 and GEN004840"
+/usr/sbin/userdel shutdown
+/usr/sbin/userdel halt
+/usr/sbin/userdel games
+/usr/sbin/userdel operator
+/usr/sbin/userdel ftp
+/usr/sbin/userdel news
+/usr/sbin/userdel gopher
+echo "LNX0034 and GEN004840 Complete"
+
+
+
+############# SSH restrictions ###############
+#
+# Uncomment this if you have physical access to the machine.
+# This will lock root out from ssh.
+# GEN001120 (G500)
+
+# We need to restrict ssh root logins; 
+echo "Locking down GEN001120"
 perl -npe 's/#PermitRootLogin yes/PermitRootLogin no/' -i /etc/ssh/sshd_config
 echo "GEN001120 Complete"
 
@@ -555,7 +570,6 @@ lock_on_fail=1
 EOF
 dnf -y update
 dnf -y install aide audit vlock i3wm logwatch nmap zsh
-
 ################ Beef up the default ruleset for AIDE #################
 # Setup AIDE off this baseline
 echo "Setting up baseline AIDE configuration ...."
@@ -563,33 +577,235 @@ echo "NOTE!!! PLEASE REVIEW THIS, AND EDIT FOR YOUR SPECIFIC CONFIGURATION!"
 
 # Write /etc/aide.conf
 echo "Appending default setuid/setgid and 666 f/d to default /etc/aide.conf"
-cat << 'EOF' >> /etc/aide.conf
-
+cat << 'EOF' > /etc/aide.conf
 # World-Writable files and directories
 # Note: There are no ww files in the base install
 
-# World-Writable Directories in base install
+@@define DBDIR /var/lib/aide
+@@define LOGDIR /var/log/aide
 
-/tmp                            PERMS
-/tmp/.pk11ipc1                  PERMS
-/tmp/.font-unix                 PERMS
-/tmp/.ICE-unix                  PERMS
-/tmp/.X11-unix                  PERMS
-/var/tmp                        PERMS
+# The location of the database to be read.
+database=file:@@{DBDIR}/aide.db.gz
 
-# set-UID and set-GID files in base install
+# The location of the database to be written.
+#database_out=sql:host:port:database:login_name:passwd:table
+#database_out=file:aide.db.new
+database_out=file:@@{DBDIR}/aide.db.new.gz
 
-/sbin/netreport                 PERMS
-/usr/libexec/utempter/utempter  PERMS
-/usr/sbin/lockdev               PERMS
-/usr/sbin/sendmail.sendmail     PERMS
-/usr/lib/vte/gnome-pty-helper   PERMS
-/usr/bin/locate                 PERMS
-/usr/bin/write                  PERMS
-/usr/bin/wall                   PERMS
-/usr/bin/ssh-agent              PERMS
-/usr/bin/lockfile               PERMS
-/usr/bin/screen                 PERMS
+# Whether to gzip the output to database
+gzip_dbout=yes
+
+# Default.
+verbose=5
+
+report_url=file:@@{LOGDIR}/aide.log
+report_url=stdout
+#report_url=stderr
+#NOT IMPLEMENTED report_url=mailto:root@foo.com
+#NOT IMPLEMENTED report_url=syslog:LOG_AUTH
+
+# These are the default rules.
+#
+#p:      permissions
+#i:      inode:
+#n:      number of links
+#u:      user
+#g:      group
+#s:      size
+#b:      block count
+#m:      mtime
+#a:      atime
+#c:      ctime
+#S:      check for growing size
+#acl:           Access Control Lists
+#selinux        SELinux security context
+#xattrs:        Extended file attributes
+#md5:    md5 checksum
+#sha1:   sha1 checksum
+#sha256:        sha256 checksum
+#sha512:        sha512 checksum
+#rmd160: rmd160 checksum
+#tiger:  tiger checksum
+
+#haval:  haval checksum (MHASH only)
+#gost:   gost checksum (MHASH only)
+#crc32:  crc32 checksum (MHASH only)
+#whirlpool:     whirlpool checksum (MHASH only)
+
+#FIPSR = p+i+n+u+g+s+m+c+acl+selinux+xattrs+sha256
+FIPSR = p+i+n+u+g+s+m+c+acl+selinux+xattrs
+
+#R:             p+i+n+u+g+s+m+c+acl+selinux+xattrs+md5
+#L:             p+i+n+u+g+acl+selinux+xattrs
+#E:             Empty group
+#>:             Growing logfile p+u+g+i+n+S+acl+selinux+xattrs
+
+# You can create custom rules like this.
+# With MHASH...
+# ALLXTRAHASHES = sha1+rmd160+sha256+sha512+whirlpool+tiger+haval+gost+crc32
+ALLXTRAHASHES = sha1+rmd160+sha256+sha512+tiger
+
+# Everything but access time (Ie. all changes)
+EVERYTHING = R+ALLXTRAHASHES
+
+# Sane, with multiple hashes
+# NORMAL = R+rmd160+sha256+whirlpool
+NORMAL = FIPSR+sha512
+
+# For directories, don't bother doing hashes
+DIR = p+i+n+u+g+acl+selinux+xattrs
+
+# Access control only
+PERMS = p+i+u+g+acl+selinux
+
+# Logfile are special, in that they often change
+LOG = >
+
+# Just do sha256 and sha512 hashes
+LSPP = FIPSR+sha512
+
+# Some files get updated automatically, so the inode/ctime/mtime change
+# but we want to know when the data inside them changes
+#DATAONLY =  p+n+u+g+s+acl+selinux+xattrs+sha256
+DATAONLY =  p+n+u+g+s+acl+selinux+xattrs+sha512
+
+# Next decide what directories/files you want in the database.
+
+/boot   NORMAL
+/bin    NORMAL
+/sbin   NORMAL
+/lib    NORMAL
+/lib64  NORMAL
+/opt    NORMAL
+/usr    NORMAL
+/root   NORMAL
+
+# These are too volatile
+!/usr/src
+!/usr/tmp
+
+# Check only permissions, inode, user and group for /etc, but
+# cover some important files closely.
+/etc    PERMS
+!/etc/mtab
+
+# Ignore backup files
+!/etc/.*~
+/etc/exports  NORMAL
+/etc/fstab    NORMAL
+/etc/passwd   NORMAL
+/etc/group    NORMAL
+/etc/gshadow  NORMAL
+/etc/shadow   NORMAL
+/etc/security/opasswd   NORMAL
+
+/etc/hosts.allow   NORMAL
+/etc/hosts.deny    NORMAL
+
+/etc/sudoers NORMAL
+/etc/skel NORMAL
+
+/etc/logrotate.d NORMAL
+
+/etc/resolv.conf DATAONLY
+
+/etc/nscd.conf NORMAL
+/etc/securetty NORMAL
+
+# Shell/X starting files
+/etc/profile NORMAL
+/etc/bashrc NORMAL
+/etc/bash_completion.d/ NORMAL
+/etc/login.defs NORMAL
+/etc/zprofile NORMAL
+/etc/zshrc NORMAL
+/etc/zlogin NORMAL
+/etc/zlogout NORMAL
+/etc/profile.d/ NORMAL
+/etc/X11/ NORMAL
+
+# Pkg manager
+/etc/yum.conf NORMAL
+/etc/yum/ NORMAL
+/etc/yum.repos.d/ NORMAL
+
+/var/log   LOG
+/var/run/utmp LOG
+
+# This gets new/removes-old filenames daily
+!/var/log/sa
+
+# As we are checking it, we've truncated yesterdays size to zero.
+!/var/log/aide.log
+
+# LSPP rules...
+# AIDE produces an audit record, so this becomes perpetual motion.
+# /var/log/audit/ LSPP
+/etc/audit/ LSPP
+/etc/libaudit.conf LSPP
+/usr/sbin/stunnel LSPP
+/var/spool/at LSPP
+/etc/at.allow LSPP
+/etc/at.deny LSPP
+/etc/cron.allow LSPP
+/etc/cron.deny LSPP
+/etc/cron.d/ LSPP
+/etc/cron.daily/ LSPP
+/etc/cron.hourly/ LSPP
+/etc/cron.monthly/ LSPP
+/etc/cron.weekly/ LSPP
+/etc/crontab LSPP
+/var/spool/cron/root LSPP
+
+/etc/login.defs LSPP
+/etc/securetty LSPP
+/var/log/faillog LSPP
+/var/log/lastlog LSPP
+
+/etc/hosts LSPP
+/etc/sysconfig LSPP
+
+/etc/inittab LSPP
+/etc/grub/ LSPP
+/etc/rc.d LSPP
+
+/etc/ld.so.conf LSPP
+
+/etc/localtime LSPP
+
+/etc/sysctl.conf LSPP
+
+/etc/modprobe.conf LSPP
+
+/etc/pam.d LSPP
+/etc/security LSPP
+/etc/aliases LSPP
+/etc/postfix LSPP
+
+/etc/ssh/sshd_config LSPP
+/etc/ssh/ssh_config LSPP
+
+/etc/stunnel LSPP
+
+/etc/vsftpd.ftpusers LSPP
+/etc/vsftpd LSPP
+
+/etc/issue LSPP
+/etc/issue.net LSPP
+
+/etc/cups LSPP
+
+# With AIDE's default verbosity level of 5, these would give lots of
+# warnings upon tree traversal. It might change with future version.
+#
+#=/lost\+found    DIR
+#=/home           DIR
+
+# Ditto /var/log/sa reason...
+!/var/log/and-httpd
+
+# The root user's dotfiles should not change and need to be watched closely.
+/root/\..* NORMAL
 EOF
 
 echo "done adding to /etc/aide.conf" 
@@ -608,6 +824,3 @@ echo "cron jobs, etc. to fit your needs"
 echo ""
 echo "GEN02440 and GEN2380 Complete"
 
-
-
-) > /root/kickstart-log.txt 2>&1
